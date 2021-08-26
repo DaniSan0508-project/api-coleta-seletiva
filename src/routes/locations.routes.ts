@@ -3,9 +3,28 @@ import knex from '../database/connection';
 
 const locationsRouter = Router();
 
+interface locationIR {
+  name: string;
+  email: string;
+  whatsapp: string;
+  latitude: number;
+  longitude: number;
+  city: string;
+  uf: string;
+  items: number[];
+}
+
 locationsRouter.post('/', async (request, response) => {
-  const { name, email, whatsapp, latitude, longitude, city, uf, items } =
-    request.body;
+  const {
+    name,
+    email,
+    whatsapp,
+    latitude,
+    longitude,
+    city,
+    uf,
+    items,
+  }: locationIR = request.body;
 
   const location = {
     image: 'fake-image.jpg',
@@ -16,20 +35,38 @@ locationsRouter.post('/', async (request, response) => {
     longitude,
     city,
     uf,
-    items,
   };
 
-  const newsId = await knex('location').insert(location);
-  const locationId = newsId[0];
+  const transaction = await knex.transaction();
 
-  const locationItens = items.map((item_id: number) => {
-    return {
-      item_id,
-      location_id: locationId,
-    };
+  const newsId = await transaction('location').insert(location);
+  const location_id = newsId[0];
+
+  const locationItems = await Promise.all(
+    items.map(async item_id => {
+      const selectedItem = await transaction('items')
+        .where('id', item_id)
+        .first();
+
+      if (!selectedItem) {
+        await transaction.rollback();
+        return response.status(400).json({ msg: 'item not found' });
+      }
+      return {
+        item_id,
+        location_id,
+      };
+    }),
+  );
+
+  await transaction('location_items').insert(locationItems);
+
+  await transaction.commit();
+
+  return response.json({
+    id: location_id,
+    ...location,
   });
-
-  return response.json(locationItens);
 });
 
 export default locationsRouter;
