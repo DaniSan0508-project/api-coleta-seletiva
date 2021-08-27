@@ -85,4 +85,24 @@ locationsRouter.get('/:id', async (request, response) => {
   return response.json({ location, items });
 });
 
+locationsRouter.get('/', async (request, response) => {
+  const { city, uf, items } = request.query;
+
+  if (city && uf && items) {
+    const parsedItems = String(items)
+      .split(',')
+      .map(item => Number(item.trim()));
+
+    const locations = await knex('location')
+      .join('location_items', 'location.id', '=', 'location_items.location_id')
+      .whereIn('location_items.item_id', parsedItems)
+      .where('city', '=', String(city))
+      .where('uf', String(uf))
+      .distinct()
+      .select('location.*');
+
+    return response.json(locations);
+  }
+});
+
 export default locationsRouter;
