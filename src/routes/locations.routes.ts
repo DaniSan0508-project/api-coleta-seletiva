@@ -1,7 +1,10 @@
-import { Router } from 'express';
+import { request, Router } from 'express';
 import knex from '../database/connection';
+import multerConfig from '../config/multer';
+import multer from 'multer';
 
 const locationsRouter = Router();
+const upload = multer(multerConfig);
 
 interface locationIR {
   name: string;
@@ -106,5 +109,28 @@ locationsRouter.get('/', async (request, response) => {
     return response.status(400).json({ msg: 'fill all fields' });
   }
 });
+locationsRouter.put(
+  '/:id',
+  upload.single('image'),
+  async (request, response) => {
+    const { id } = request.params;
+    const image = request.file?.filename;
+
+    const location = await knex('location').where('id', id).first();
+
+    if (!location) {
+      return response.status(400).json({ msg: 'Location not found' });
+    }
+
+    const locationUpdated = {
+      ...location,
+      image,
+    };
+
+    await knex('location').update(locationUpdated).where('id', id);
+
+    return response.json(locationUpdated);
+  },
+);
 
 export default locationsRouter;
