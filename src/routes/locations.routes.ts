@@ -102,6 +102,8 @@ locationsRouter.get('/', async (request, response) => {
       .select('location.*');
 
     return response.json(locations);
+  } else {
+    return response.status(400).json({ msg: 'fill all fields' });
   }
 });
 
