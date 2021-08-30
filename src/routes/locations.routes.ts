@@ -1,4 +1,5 @@
-import { request, Router } from 'express';
+import { Router } from 'express';
+import { celebrate, Joi } from 'celebrate';
 import knex from '../database/connection';
 import multerConfig from '../config/multer';
 import multer from 'multer';
@@ -17,60 +18,80 @@ interface locationIR {
   items: number[];
 }
 
-locationsRouter.post('/', async (request, response) => {
-  const {
-    name,
-    email,
-    whatsapp,
-    latitude,
-    longitude,
-    city,
-    uf,
-    items,
-  }: locationIR = request.body;
+locationsRouter.post(
+  '/',
+  celebrate(
+    {
+      body: Joi.object().keys({
+        name: Joi.string().required(),
+        email: Joi.string().required().email(),
+        whatsapp: Joi.string().required(),
+        latitude: Joi.number().required(),
+        longitude: Joi.number().required(),
+        city: Joi.string().required(),
+        uf: Joi.string().required().max(2),
+        items: Joi.array().items(Joi.number()).required(),
+      }),
+    },
+    {
+      abortEarly: false,
+    },
+  ),
+  async (request, response) => {
+    const {
+      name,
+      email,
+      whatsapp,
+      latitude,
+      longitude,
+      city,
+      uf,
+      items,
+    }: locationIR = request.body;
 
-  const location = {
-    image: 'fake-image.jpg',
-    name,
-    email,
-    whatsapp,
-    latitude,
-    longitude,
-    city,
-    uf,
-  };
+    const location = {
+      image: 'fake-image.jpg',
+      name,
+      email,
+      whatsapp,
+      latitude,
+      longitude,
+      city,
+      uf,
+    };
 
-  const transaction = await knex.transaction();
+    const transaction = await knex.transaction();
 
-  const newsId = await transaction('location').insert(location);
-  const location_id = newsId[0];
+    const newsId = await transaction('location').insert(location);
+    const location_id = newsId[0];
 
-  const locationItems = await Promise.all(
-    items.map(async item_id => {
-      const selectedItem = await transaction('items')
-        .where('id', item_id)
-        .first();
+    const locationItems = await Promise.all(
+      items.map(async item_id => {
+        const selectedItem = await transaction('items')
+          .where('id', item_id)
+          .first();
 
-      if (!selectedItem) {
-        await transaction.rollback();
-        return response.status(400).json({ msg: 'item not found' });
-      }
-      return {
-        item_id,
-        location_id,
-      };
-    }),
-  );
+        if (!selectedItem) {
+          await transaction.rollback();
+          return response.status(400).json({ msg: 'item not found' });
+        }
+        return {
+          item_id,
+          location_id,
+        };
+      }),
+    );
 
-  await transaction('location_items').insert(locationItems);
+    await transaction('location_items').insert(locationItems);
 
-  await transaction.commit();
+    await transaction.commit();
 
-  return response.json({
-    id: location_id,
-    ...location,
-  });
-});
+    return response.json({
+      id: location_id,
+      ...location,
+    });
+  },
+);
 
 locationsRouter.get('/:id', async (request, response) => {
   const { id } = request.params;
@@ -92,7 +113,7 @@ locationsRouter.get('/', async (request, response) => {
   const { city, uf, items } = request.query;
 
   if (city && uf && items) {
-    const parsedItems = String(items)
+    const parsedItems: number[] = String(items)
       .split(',')
       .map(item => Number(item.trim()));
 
